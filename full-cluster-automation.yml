@@ -1,0 +1,4 @@
+---
+- import_playbook: cleanup.yml
+- import_playbook: install-rke2.yml
+- import_playbook: configure-kubectl.yml

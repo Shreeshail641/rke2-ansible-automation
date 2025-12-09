@@ -1,0 +1,6 @@
+# ignore secrets/keys
+*.pem
+*.key
+*.vault
+*.secret
+secrets.yml

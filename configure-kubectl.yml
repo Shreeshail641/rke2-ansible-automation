@@ -1,0 +1,35 @@
+---
+- name: Configure kubectl on master
+  hosts: master
+  become: yes
+  tasks:
+
+    - name: Symlink kubectl
+      file:
+        src: /var/lib/rancher/rke2/bin/kubectl
+        dest: /usr/local/bin/kubectl
+        state: link
+
+    - name: Create .kube directory for vboxuser
+      file:
+        path: /home/vboxuser/.kube
+        state: directory
+        owner: vboxuser
+        group: vboxuser
+        mode: "0755"
+
+    - name: Copy kubeconfig to user home with root privileges
+      command: cp /etc/rancher/rke2/rke2.yaml /home/vboxuser/.kube/config
+
+    - name: Fix kubeconfig permissions
+      file:
+        path: /home/vboxuser/.kube/config
+        owner: vboxuser
+        group: vboxuser
+        mode: "0600"
+
+    - name: Replace localhost with master IP
+      replace:
+        path: /home/vboxuser/.kube/config
+        regexp: "127.0.0.1"
+        replace: "{{ ansible_host }}"
