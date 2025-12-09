@@ -60,7 +60,6 @@ pipeline {
       steps {
         withCredentials([
           sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'ANSIBLE_USER'),
-          string(credentialsId: 'ansible-vault-pass', variable: 'VAULT_PASS'),
           string(credentialsId: 'ansible-become-pass', variable: 'BECOME_PASS')
         ]) {
           sh '''
