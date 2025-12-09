@@ -1,6 +1,6 @@
-// Jenkinsfile — agent-labeled (requires Jenkins agent with Ansible installed)
+// Clean Jenkinsfile - uses ansible-ssh-key; does not require ansible-become-pass
 pipeline {
-  agent { label 'ansible' } // change label if your Jenkins node label is different
+  agent { label 'ansible' }
 
   environment {
     INVENTORY = "inventory.ini"
@@ -42,13 +42,16 @@ pipeline {
             mkdir -p ~/.ssh
             touch ~/.ssh/known_hosts
 
-            # Add hosts from inventory into known_hosts to avoid interactive SSH prompt
-            awk '/ansible_host=/{match($0,/ansible_host=([^ ]+)/,a); if(a[1]) print a[1]} /^[0-9]/ {print $1}' ${INVENTORY} \
-              | sort -u | while read host; do
+            # robust host extraction: ansible_host=IP and bare IP lines
+            grep -Eo 'ansible_host=[0-9]+(\\.[0-9]+){3}' ${INVENTORY} 2>/dev/null | sed 's/ansible_host=//' >> /tmp/hosts.list || true
+            grep -Eo '^[0-9]+(\\.[0-9]+){3}' ${INVENTORY} 2>/dev/null >> /tmp/hosts.list || true
+
+            sort -u /tmp/hosts.list | while read host; do
               if [ -n "$host" ]; then
                 ssh-keyscan -H "$host" >> ~/.ssh/known_hosts 2>/dev/null || true
               fi
             done
+            rm -f /tmp/hosts.list
 
             ls -la ~/.ssh
           '''
@@ -58,33 +61,16 @@ pipeline {
 
     stage('Run Ansible Playbook') {
       steps {
-        withCredentials([
-          sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'ANSIBLE_USER'),
-          string(credentialsId: 'ansible-become-pass', variable: 'BECOME_PASS')
-        ]) {
+        withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'ANSIBLE_USER')]) {
           sh '''
             echo "Running Ansible Playbook..."
 
-            VAULT_OPT=""
-            if [ -n "$VAULT_PASS" ]; then
-              VAULT_FILE=$(mktemp)
-              printf "%s" "$VAULT_PASS" > "$VAULT_FILE"
-              chmod 600 "$VAULT_FILE"
-              VAULT_OPT="--vault-password-file $VAULT_FILE"
-            fi
+            # ensure the private key file is readable
+            chmod 600 "$SSH_KEY_FILE"
 
-            BECOME_OPT=""
-            if [ -n "$BECOME_PASS" ]; then
-              BECOME_OPT="--extra-vars ansible_become_pass=${BECOME_PASS}"
-            fi
-
-            ansible-playbook -i ${INVENTORY} ${PLAYBOOK} \
-              --private-key "$SSH_KEY_FILE" ${VAULT_OPT} ${BECOME_OPT} -vv
+            ansible-playbook -i ${INVENTORY} ${PLAYBOOK} --private-key "$SSH_KEY_FILE" -vv
 
             RC=$?
-
-            [ -n "$VAULT_FILE" ] && shred -u "$VAULT_FILE" || true
-
             exit $RC
           '''
         }
