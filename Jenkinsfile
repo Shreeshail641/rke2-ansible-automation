@@ -1,6 +1,6 @@
 // Jenkinsfile — agent-labeled (requires Jenkins agent with Ansible installed)
 pipeline {
-  agent { label 'ansible' } // change label if needed
+  agent { label 'ansible' } // change label if your Jenkins node label is different
 
   environment {
     INVENTORY = "inventory.ini"
